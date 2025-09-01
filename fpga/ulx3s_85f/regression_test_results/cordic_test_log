@@ -1,0 +1,33 @@
+=== CORDIC Regression Test: 100 Angles ===
+Fixed parameters:
+  in_x = 0x09B8 (+0.607422)
+  in_y = 0x0000 (+0.000000)
+  i_atan_0 = 0x0C91 (+0.785400)
+Tolerance: cos=±0.005741, sin=±0.005741
+--------------------------------------------------------------------------------
+Test  10: θ= 0.565 rad (  32.4°) | cos_err=0.003328, sin_err=0.003844 | ✅ PASS
+Test  20: θ= 1.194 rad (  68.4°) | cos_err=0.003378, sin_err=0.001620 | ✅ PASS
+Test  30: θ= 1.822 rad ( 104.4°) | cos_err=0.005038, sin_err=0.002120 | ✅ PASS
+Test  40: θ= 2.450 rad ( 140.4°) | cos_err=0.003168, sin_err=0.003879 | ✅ PASS
+Test  50: θ= 3.079 rad ( 176.4°) | cos_err=0.000997, sin_err=0.004685 | ✅ PASS
+Test  60: θ= 3.707 rad ( 212.4°) | cos_err=0.003328, sin_err=0.003844 | ✅ PASS
+Test  70: θ= 4.335 rad ( 248.4°) | cos_err=0.003378, sin_err=0.001620 | ✅ PASS
+Test  80: θ= 4.964 rad ( 284.4°) | cos_err=0.005038, sin_err=0.002120 | ✅ PASS
+Test  90: θ= 5.592 rad ( 320.4°) | cos_err=0.003168, sin_err=0.003879 | ✅ PASS
+Test 100: θ= 6.220 rad ( 356.4°) | cos_err=0.000997, sin_err=0.004685 | ✅ PASS
+
+================================================================
+REGRESSION TEST SUMMARY
+================================================================
+Total tests run:     100
+Passed:              100 (100.0%)
+Failed:              0 (0.0%)
+Execution time:      0.92 seconds
+Max cosine error:    0.00574060
+Max sine error:      0.00574060
+Mean cosine error:   0.00329450
+Mean sine error:     0.00328961
+🎉 ALL TESTS PASSED! CORDIC IP looks good.
+
+Test results saved to: cordic_test_results_20250901_061553.json
+>>> 
