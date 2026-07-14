@@ -269,6 +269,7 @@ module chip_top #(
     
     // wafer.space logo - can be removed if desired
     (* keep *) gf180mcu_ws_ip__logo wafer_space_logo ();
+    (* keep *) gf180mcu_dpk_ip__logo dpk_logo ();
 
 endmodule
 

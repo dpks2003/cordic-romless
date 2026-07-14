@@ -68,6 +68,7 @@ IGNORE_DISCONNECTED_MODULES:
 - gf180mcu_ws_ip__project_id
 - gf180mcu_ws_ip__logo
 - gf180mcu_ws_ip__marker
+- gf180mcu_dpk_ip__logo
 
 # Clock
 CLOCK_PORT: clk_PAD
