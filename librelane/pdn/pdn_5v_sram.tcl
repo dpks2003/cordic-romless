@@ -1,11 +1,5 @@
 # SRAM macros
 
-define_pdn_grid \
-    -macro \
-    -instances i_chip_core.sram_0 \
-    -name sram_macros_NS \
-    -starts_with POWER \
-    -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
 add_pdn_connect \
     -grid sram_macros_NS \
@@ -38,12 +32,6 @@ add_pdn_stripe \
     -starts_with GROUND \
     -number_of_straps 7
 
-define_pdn_grid \
-    -macro \
-    -instances i_chip_core.sram_1 \
-    -name sram_macros_WE \
-    -starts_with POWER \
-    -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
 add_pdn_connect \
     -grid sram_macros_WE \
