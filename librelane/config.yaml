@@ -37,6 +37,7 @@ VERILOG_FILES:
 - dir::../src/top_CORDIC_Engine_v1.v
 - dir::../src/CORDIC_Engine_v1.v
 - dir::../src/dynamic_atan.v
+- dir::../src/rst_sync.v
 
 # Enable plugin for better SystemVerilog support
 # USE_SLANG: True
@@ -73,11 +74,11 @@ IGNORE_DISCONNECTED_MODULES:
 # Clock
 CLOCK_PORT: clk_PAD
 CLOCK_NET: clk_pad/Y
-CLOCK_PERIOD: 40 # 20 MHz
+CLOCK_PERIOD: 50 # 20 MHz
 
 # Overfix hold violations
-PL_RESIZER_HOLD_SLACK_MARGIN: 0.35
-GRT_RESIZER_HOLD_SLACK_MARGIN: 0.3
+PL_RESIZER_HOLD_SLACK_MARGIN: 0.2
+GRT_RESIZER_HOLD_SLACK_MARGIN: 0.2
 
 # Increase density for more 
 # logic on your die
