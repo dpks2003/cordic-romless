@@ -1,41 +1,136 @@
-![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
+# gf180mcu Project Template
 
-# Tiny Tapeout Verilog Project Template
+Project template for wafer.space MPW runs using the gf180mcu PDK.
 
-- [Read the documentation for project](docs/info.md)
+## Dependencies
 
-## What is Tiny Tapeout?
+Too manage all dependencies, the project template includes a Nix shell with all the required tools.
+Install Nix and LibreLane by following the Nix-based installation instructions: https://librelane.readthedocs.io/en/latest/installation/nix_installation/index.html
+To activate the shell, simply run `nix-shell` in the root directory of this repository. The subsequent steps assume that you are in the Nix shell of the project template.
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## Prerequisites
 
-To learn more and get started, visit https://tinytapeout.com.
+The project template uses the open_pdks gf180mcuD variant of the PDK.
+To clone the latest PDK version via [Ciel](https://github.com/fossi-foundation/ciel), run `make clone-pdk`.
 
-## Set up your Verilog project
+## Implement the Design
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+With the Nix shell enabled, run the implementation:
 
-The GitHub action will automatically build the ASIC files using [OpenLane](https://www.zerotoasiccourse.com/terminology/openlane/).
+```
+make librelane
+```
 
-## Enable GitHub actions to build the results page
+You can find all output artifacts in the `librelane/runs/<timestamp>/` directory.
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+## View the Design
 
-## Resources
+After completion, you can view the design using the OpenROAD GUI:
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
+```
+make librelane-openroad
+```
 
-## What next?
+Or using KLayout:
 
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
+```
+make librelane-klayout
+```
+
+## Verification and Simulation
+
+For the verification of the chip we use [cocotb](https://www.cocotb.org/). Cocotb is a Python-based testbench environment. The simulator that is used by the project template is [Icarus Verilog](https://github.com/steveicarus/iverilog).
+
+The testbench is located in `cocotb/chip_top_tb.py`. To run the RTL simulation, run the following command:
+
+```
+make sim
+```
+
+To run the GL (gate-level) simulation, run the following command:
+
+```
+make sim-gl
+```
+
+> [!NOTE]
+> You need to have the latest implementation of your design in the `final/` folder. After a run has completed without errors, the final views will be copied to `final/`.
+
+In both cases, a waveform file will be generated under `cocotb/sim_build/chip_top.fst`.
+You can view it using a waveform viewer, for example, [GTKWave](https://gtkwave.github.io/gtkwave/).
+
+```
+make sim-view
+```
+
+You can now update the testbench according to your design.
+
+## Implementing Your Own Design
+
+The source files for this template can be found in the `src/` directory. `chip_top.sv` defines the top-level ports and instantiates `chip_core`, chip ID (QR code) and the wafer.space logo. To allow for the default bonding setup, do not change the number of pads in order to keep the original bondpad positions. To be compatible with the default breakout PCB, do not change any of the power or ground pads. However, you can change the type of the signal pads, e.g. to bidirectional, input-only or e.g. analog pads. The template provides the `NUM_INPUT` and `NUM_BIDIR` parameters for this purpose.
+
+The actual pad positions are defined in the LibreLane configuration file under `librelane/config.yaml`. The variables `PAD_SOUTH`/`PAD_EAST`/`PAD_NORTH`/`PAD_WEST` determine the respective pad placement. The LibreLane configuration also allows you to customize the flow (enable or disable steps), specify the source files, set various variables for the steps, and instantiate macros. For more information about the configuration, please refer to the LibreLane documentation: https://librelane.readthedocs.io/en/latest/
+
+To implement your own design, simply edit `chip_core.sv`. The `chip_core` module receives the clock and reset, as well as the signals from the pads defined in `chip_top`. As an example, a 42-bit wide counter is implemented.
+
+> [!NOTE]
+> For more comprehensive SystemVerilog support, enable the `USE_SLANG` variable in the LibreLane configuration.
+
+## Choosing a Different Slot Size
+
+The template supports the following slot sizes: `1x1`, `0p5x1`, `1x0p5`, `0p5x0p5`.
+By default, the design is implemented using the `1x1` slot definition.
+
+To select a different slot size, simply set the `SLOT` environment variable.
+This can be done when invoking a make target:
+
+```
+SLOT=0p5x0p5 make librelane
+```
+
+Alternatively, you can export the slot size:
+
+```
+export SLOT=0p5x0p5
+```
+
+You can change the slot that is selected by default in the Makefile by editing the value of `DEFAULT_SLOT`.
+
+## Select Different IP Libraries
+
+The project template has support for selecting libraries with the below environment variables:
+
+| Env  | Available Values                                                          | Description                |
+|------|---------------------------------------------------------------------------|----------------------------|
+| SCL  | gf180mcu_fd_sc_mcu7t5v0, gf180mcu_fd_sc_mcu9t5v0, gf180mcu_as_sc_mcu7t3v3 | The standard cell library. |
+| PAD  | gf180mcu_fd_io, gf180mcu_ocd_io                                           | The I/O pad library.       |
+| SRAM | gf180mcu_fd_ip_sram, gf180mcu_ocd_ip_sram                                 | The SRAM library.          |
+
+For example, to build the 0p5x0p5 chip with 3v3 libraries:
+
+```
+SLOT=0p5x0p5 SCL=gf180mcu_as_sc_mcu7t3v3 PAD=gf180mcu_ocd_io SRAM=gf180mcu_ocd_ip_sram make librelane
+```
+
+The default values can be changed in the Makefile.
+
+> [!NOTE]
+> Not all of the community-created IPs have been tested yet, so support for them is experimental!
+
+## Building a Standalone Padring for Analog Design
+
+To build just the padring without any standard cell rows, digital routing or filler cells, run the following command:
+
+```
+make librelane-padring
+```
+
+It is also possible to build the padring for other slot sizes:
+
+```
+SLOT=0p5x0p5 make librelane-padring
+```
+
+## Precheck
+
+To check whether your design is suitable for manufacturing, run the [gf180mcu-precheck](https://github.com/wafer-space/gf180mcu-precheck) with your layout.
