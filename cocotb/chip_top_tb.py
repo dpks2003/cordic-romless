@@ -322,6 +322,7 @@ def chip_top_runner():
         sources.append(proj_path / "../src/top_CORDIC_Engine_v1.v")
         sources.append(proj_path / "../src/CORDIC_Engine_v1.v")
         sources.append(proj_path / "../src/dynamic_atan.v")
+        sources.append(proj_path / "../src/rst_sync.v")
 
     sources += [
         Path(pdk_root) / pdk / f"libs.ref/{pad}/verilog/{pad}.v",

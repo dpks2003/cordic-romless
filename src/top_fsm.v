@@ -37,6 +37,7 @@ module cordic_fsm #(
     wire [DATA_WIDTH_CORDIC-1:0] in_x, in_y, in_alpha, in_atan_0;
     wire [DATA_WIDTH_CORDIC-1:0] out_costheta, out_sintheta, out_alpha;
     wire o_valid_out;
+    reg valid_cordic_angle;
 
     top_CORDIC_Engine_v1 #(
         .DATA_WIDTH(DATA_WIDTH_CORDIC),
@@ -68,7 +69,7 @@ module cordic_fsm #(
     reg [2:0] tx_byte_count;
     reg [63:0] r_spi_rx_data;
     reg [47:0] r_spi_tx_data;
-    reg valid_cordic_angle;
+
 
     assign in_x      = r_spi_rx_data[15:0];
     assign in_y      = r_spi_rx_data[31:16];
