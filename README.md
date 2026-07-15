@@ -4,6 +4,8 @@
 
 Eight independent ROM-less CORDIC engines on a single GF180MCU die, each with its own SPI-slave interface. Built for the [wafer.space](https://wafer.space/) shuttle on the 0.5×0.5 slot. 
 
+ **AFASIK Its the only ROM-Less Implementation for CORDIC Algorithm**
+
 Second silicon of the [Tiny Tapeout SKY25a single-core version](https://github.com/rohanverma94/ttsky-romless-cordic-engine), re-architected for GF180MCU: 8x cores.
 
 
@@ -13,6 +15,26 @@ Second silicon of the [Tiny Tapeout SKY25a single-core version](https://github.c
 Each core computes sin θ and cos θ using a CORDIC rotator in rotation mode, with the arctan micro-rotation angles generated on the fly by Taylor-series approximation , no coefficient ROM. Data format is 16-bit signed fixed point (1 sign, 3 integer, 12 fraction bits); the engine runs 13 iterations, with quadrant pre-mapping and output post-processing to cover the full [0, 2π] range. Mean absolute error ≈ 0.003 over 1000 samples versus MATLAB reference.
 
 Full math, block diagram, and accuracy plots: [docs/info.md](docs/info.md).
+
+**Future plan** - working on linear and vectoring mode for a complete CORDIC Coprocessor.
+
+## CHIP 
+
+## CHIP
+
+<div align="center">
+  <img src="./assets/chip_top.png" alt="Chip Top" width="400">
+</div>
+
+
+## Chip Art 
+
+A ghost with flower and balloon in hands.
+
+<div align="center">
+  <img src="./assets/chip_art.png" alt="Chip Art" width="400">
+</div>
+
 
 ## Architecture
 
@@ -67,6 +89,11 @@ make SLOT=0p5x0p5 librelane-klayout # view the result
 ```
 
 Final views land in `final/`. Timing-relevant config lives in `librelane/config.yaml` (`CLOCK_PERIOD: 50`, `SYNTH_STRATEGY: "DELAY 1"`, setup-repair margins).
+
+## FPGA Emulation 
+
+The core has been emulated on various FPGA platforms you can check out `fpga/` to check and test them out.
+More targets to be added soon 
 
 ## Verification
 
