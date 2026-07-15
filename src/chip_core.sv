@@ -4,25 +4,37 @@
 `default_nettype none
 
 //======================================================================
-// chip_core -- 4x ROM-less CORDIC engine (SPI slave)
+// chip_core -- NUM_CORES x ROM-less CORDIC engine (SPI slave)
 //
 // Target slot: 0.5x0.5 (Quarter)
 //   NUM_INPUT_PADS  = 6
 //   NUM_BIDIR_PADS  = 38
 //   NUM_ANALOG_PADS = 4
 //
-// Every core gets its own SPI pins. Only clk and rst_n are shared.
+// Every core gets its own SCLK, MOSI, CSn, MISO and RDY pin.
+// Only clk and rst_n are shared. Nothing is bussed on-chip -- if you
+// want one host to drive several cores, wire them together on the board.
 //
-// PAD MAP (5 pads per core, contiguous):
+//----------------------------------------------------------------------
+// PAD MAP (grouped by signal, so a bussed SCLK/MOSI fans out to
+//          adjacent pads instead of hopping around the ring)
 //
-//   Core 0 : bidir[ 0]=SCLK0 bidir[ 1]=MOSI0 bidir[ 2]=CSn0 bidir[ 3]=MISO0 bidir[ 4]=RDY0
-//   Core 1 : bidir[ 5]=SCLK1 bidir[ 6]=MOSI1 bidir[ 7]=CSn1 bidir[ 8]=MISO1 bidir[ 9]=RDY1
-//   Core 2 : bidir[10]=SCLK2 bidir[11]=MOSI2 bidir[12]=CSn2 bidir[13]=MISO2 bidir[14]=RDY2
-//   Core 3 : bidir[15]=SCLK3 bidir[16]=MOSI3 bidir[17]=CSn3 bidir[18]=MISO3 bidir[19]=RDY3
+//   NUM_CORES = 8:
 //
-//   bidir[37:20] = unused (driven low)
-//   input[5:0]   = unused
-//   analog[3:0]  = unused
+//     input[0..5]    = CSn[0..3]      (first 6 chip selects)
+//
+//     bidir[ 0.. 7]  = SCLK[0..7]     (in)
+//     bidir[ 8..15]  = MOSI[0..7]     (in)
+//     bidir[16..17]  = CSn[4..7]      (in)  -- overflow, input pads full
+//     bidir[18..25]  = MISO[0..7]     (out)
+//     bidir[26..33]  = RDY[0..7]      (out)
+//     bidir[34..37]  = unused, driven low
+//
+//   NUM_CORES = 6 fits perfectly: all 6 CSn on the input pads, no
+//   overflow, and only 24 bidir pads used.
+//
+//   Max is 8: 24 inputs (6 on input pads, 18 on bidir) + 16 outputs
+//   = 34 bidir. A 9th core needs 39 and does not fit.
 //======================================================================
 
 module chip_core #(
@@ -54,26 +66,42 @@ module chip_core #(
     inout  wire [NUM_ANALOG_PADS-1:0] analog     // Analog
 );
 
-    localparam NUM_CORES         = 4;
-    localparam PADS_PER_CORE     = 5;   // SCLK, MOSI, CSn, MISO, RDY
-    localparam PADS_USED         = NUM_CORES * PADS_PER_CORE;   // 20
+    // ------------------------------------------------------------------
+    // Configuration -- change NUM_CORES here, the pad map follows
+    // ------------------------------------------------------------------
+    localparam NUM_CORES         = 8;
 
     localparam DATA_WIDTH_CORDIC = 16;
     localparam DATA_WIDTH_SPI    = 8;
     localparam N_PE              = 13;
 
+    // CSn goes on the input-only pads first, overflow onto bidir.
+    localparam CS_ON_INPUT = (NUM_CORES < NUM_INPUT_PADS) ? NUM_CORES : NUM_INPUT_PADS;
+    localparam CS_ON_BIDIR = NUM_CORES - CS_ON_INPUT;
+
+    // Bidir pad map
+    localparam SCLK_BASE = 0;
+    localparam MOSI_BASE = SCLK_BASE + NUM_CORES;
+    localparam CSN_BASE  = MOSI_BASE + NUM_CORES;
+    localparam MISO_BASE = CSN_BASE  + CS_ON_BIDIR;
+    localparam RDY_BASE  = MISO_BASE + NUM_CORES;
+    localparam PADS_USED = RDY_BASE  + NUM_CORES;
+
+    // ------------------------------------------------------------------
     // Per-core SPI nets
+    // ------------------------------------------------------------------
     wire [NUM_CORES-1:0] sclk;
     wire [NUM_CORES-1:0] mosi;
     wire [NUM_CORES-1:0] cs_n;
     wire [NUM_CORES-1:0] miso;
     wire [NUM_CORES-1:0] data_ready;
 
-    // Input-only pads: unused
+    // ------------------------------------------------------------------
+    // Pad options: same for every pad
+    // ------------------------------------------------------------------
     assign input_pu = '0;
     assign input_pd = '0;
 
-    // Bidir pad options are the same for every pad
     assign bidir_cs = '0;   // CMOS buffer
     assign bidir_sl = '0;   // fast slew
     assign bidir_pu = '0;   // no pull-up
@@ -81,32 +109,41 @@ module chip_core #(
     assign bidir_ie = ~bidir_oe;
 
     // ------------------------------------------------------------------
-    // Four CORDIC cores, each with its own SPI pins
+    // The cores
     // ------------------------------------------------------------------
     genvar i;
     generate
         for (i = 0; i < NUM_CORES; i = i + 1) begin : g_core
 
-            localparam B = i * PADS_PER_CORE;
+            // ---- SCLK, MOSI : bidir pads used as inputs ----
+            assign sclk[i] = bidir_in[SCLK_BASE + i];
+            assign mosi[i] = bidir_in[MOSI_BASE + i];
 
-            // Inputs: SCLK, MOSI, CSn
-            assign sclk[i] = bidir_in[B+0];
-            assign mosi[i] = bidir_in[B+1];
-            assign cs_n[i] = bidir_in[B+2];
+            assign bidir_oe [SCLK_BASE + i] = 1'b0;
+            assign bidir_out[SCLK_BASE + i] = 1'b0;
 
-            assign bidir_oe [B+0] = 1'b0;
-            assign bidir_oe [B+1] = 1'b0;
-            assign bidir_oe [B+2] = 1'b0;
-            assign bidir_out[B+0] = 1'b0;
-            assign bidir_out[B+1] = 1'b0;
-            assign bidir_out[B+2] = 1'b0;
+            assign bidir_oe [MOSI_BASE + i] = 1'b0;
+            assign bidir_out[MOSI_BASE + i] = 1'b0;
 
-            // Outputs: MISO, DATA_READY
-            assign bidir_oe [B+3] = 1'b1;
-            assign bidir_oe [B+4] = 1'b1;
-            assign bidir_out[B+3] = miso[i];
-            assign bidir_out[B+4] = data_ready[i];
+            // ---- CSn : input-only pad if there is one, else bidir ----
+            if (i < CS_ON_INPUT) begin : g_cs_input
+                assign cs_n[i] = input_in[i];
+            end
+            else begin : g_cs_bidir
+                assign cs_n[i] = bidir_in[CSN_BASE + i - CS_ON_INPUT];
 
+                assign bidir_oe [CSN_BASE + i - CS_ON_INPUT] = 1'b0;
+                assign bidir_out[CSN_BASE + i - CS_ON_INPUT] = 1'b0;
+            end
+
+            // ---- MISO, RDY : bidir pads used as outputs ----
+            assign bidir_oe [MISO_BASE + i] = 1'b1;
+            assign bidir_out[MISO_BASE + i] = miso[i];
+
+            assign bidir_oe [RDY_BASE + i]  = 1'b1;
+            assign bidir_out[RDY_BASE + i]  = data_ready[i];
+
+            // ---- The core ----
             cordic_fsm #(
                 .DATA_WIDTH_CORDIC (DATA_WIDTH_CORDIC),
                 .DATA_WIDTH_SPI    (DATA_WIDTH_SPI),
@@ -124,11 +161,15 @@ module chip_core #(
         end
     endgenerate
 
-    // Unused bidir pads: drive low
+    // ------------------------------------------------------------------
+    // Spare bidir pads: drive low
+    // ------------------------------------------------------------------
     assign bidir_oe [NUM_BIDIR_PADS-1:PADS_USED] = '1;
     assign bidir_out[NUM_BIDIR_PADS-1:PADS_USED] = '0;
 
+    // ------------------------------------------------------------------
     // Tie off what we do not read
+    // ------------------------------------------------------------------
     logic _unused;
     assign _unused = &{input_in, analog, bidir_in};
 
