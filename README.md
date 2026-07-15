@@ -1,136 +1,87 @@
-# gf180mcu Project Template
+# CORDIC ROMless 8-core, 
 
-Project template for wafer.space MPW runs using the gf180mcu PDK.
+## wafer.space run2 GF180MCU
 
-## Dependencies
+Eight independent ROM-less CORDIC engines on a single GF180MCU die, each with its own SPI-slave interface. Built for the [wafer.space](https://wafer.space/) shuttle on the 0.5×0.5 slot. 
 
-Too manage all dependencies, the project template includes a Nix shell with all the required tools.
-Install Nix and LibreLane by following the Nix-based installation instructions: https://librelane.readthedocs.io/en/latest/installation/nix_installation/index.html
-To activate the shell, simply run `nix-shell` in the root directory of this repository. The subsequent steps assume that you are in the Nix shell of the project template.
+Second silicon of the [Tiny Tapeout SKY25a single-core version](https://github.com/rohanverma94/ttsky-romless-cordic-engine), re-architected for GF180MCU: 8x cores.
 
-## Prerequisites
 
-The project template uses the open_pdks gf180mcuD variant of the PDK.
-To clone the latest PDK version via [Ciel](https://github.com/fossi-foundation/ciel), run `make clone-pdk`.
 
-## Implement the Design
+## What it does
 
-With the Nix shell enabled, run the implementation:
+Each core computes sin θ and cos θ using a CORDIC rotator in rotation mode, with the arctan micro-rotation angles generated on the fly by Taylor-series approximation , no coefficient ROM. Data format is 16-bit signed fixed point (1 sign, 3 integer, 12 fraction bits); the engine runs 13 iterations, with quadrant pre-mapping and output post-processing to cover the full [0, 2π] range. Mean absolute error ≈ 0.003 over 1000 samples versus MATLAB reference.
 
-```
-make librelane
-```
+Full math, block diagram, and accuracy plots: [docs/info.md](docs/info.md).
 
-You can find all output artifacts in the `librelane/runs/<timestamp>/` directory.
+## Architecture
 
-## View the Design
+The cores are fully independent ie separate SCLK, MOSI, CSn, MISO and RDY per core; only clock and reset are shared, and nothing is bussed on-chip. To drive several cores from one host, bus SCLK/MOSI on the board and use the chip selects.
 
-After completion, you can view the design using the OpenROAD GUI:
+Each iteration is executed in two clock phases (shift, then add/subtract), splitting the barrel-shift moved to adder chain that dominated the critical path. This only latency changes (26 cycles per rotation plus load/output — irrelevant against SPI transfer time). The `dynamic_atan` generator is kept in lockstep via a step-enable pulsed each add phase.
 
-```
-make librelane-openroad
-```
+Timing closed on 40 ns (25MHz) with 5.56 ns setup slack on max_ss_125C_4v50 corner
 
-Or using KLayout:
+So could be clocked upto  34.4 ns ie ~29 MHz. 
 
-```
-make librelane-klayout
-```
+## Pin map (0.5×0.5 slot: 4 input pads, 38 bidir pads)
 
-## Verification and Simulation
+| Pads | Function | Direction |
+|---|---|---|
+| `input[0..3]` | CSn[0..3] | in |
+| `bidir[0..7]` | SCLK[0..7] | in |
+| `bidir[8..15]` | MOSI[0..7] | in |
+| `bidir[16..19]` | CSn[4..7] | in |
+| `bidir[20..27]` | MISO[0..7] | out |
+| `bidir[28..35]` | RDY[0..7] | out |
+| `bidir[36..37]` | spare, driven low | out |
 
-For the verification of the chip we use [cocotb](https://www.cocotb.org/). Cocotb is a Python-based testbench environment. The simulator that is used by the project template is [Icarus Verilog](https://github.com/steveicarus/iverilog).
+The map is computed parametrically in `src/chip_core.sv` from `NUM_CORES` and the slot's pad counts; the testbench derives the same map from the same formulas.
 
-The testbench is located in `cocotb/chip_top_tb.py`. To run the RTL simulation, run the following command:
+## SPI protocol (per core)
 
-```
-make sim
-```
+Mode 0, MSB-first within a byte, one CSn pulse per byte, SCLK ≤ core_clk/4 (≤ 5 MHz at 20 MHz core).
 
-To run the GL (gate-level) simulation, run the following command:
+Write 8 bytes — the 64-bit word `{in_atan_0, in_alpha, in_y, in_x}` (16 bits each), transmitted least-significant byte first. Wait for RDY to assert, then read 6 bytes back: `{out_alpha, out_costheta, out_sintheta}`, also LSB-first per 16-bit word.
 
-```
-make sim-gl
-```
+| Signal | Meaning |
+|---|---|
+| `in_x`, `in_y` | scaled input vector (y = 0 for sin/cos computation) |
+| `in_alpha` | input angle θ in radians |
+| `in_atan_0` | initial micro-rotation angle, arctan(2⁰) |
+| `out_costheta`, `out_sintheta` | cos θ, sin θ |
+| `out_alpha` | residual angle (converges to ~0) |
 
-> [!NOTE]
-> You need to have the latest implementation of your design in the `final/` folder. After a run has completed without errors, the final views will be copied to `final/`.
+Reference vector: `in_x=0x09B8, in_y=0x0000, in_alpha=0x3244 (π), in_atan_0=0x0C91` → `cos=0xF001 (≈ −1.0), sin=0x0012 (≈ 0), alpha=0xFFFF`.
 
-In both cases, a waveform file will be generated under `cocotb/sim_build/chip_top.fst`.
-You can view it using a waveform viewer, for example, [GTKWave](https://gtkwave.github.io/gtkwave/).
+An RP2040 (Pico) was used as the SPI master for all bring-up of the original silicon.
 
-```
-make sim-view
-```
+## Building the chip
 
-You can now update the testbench according to your design.
-
-## Implementing Your Own Design
-
-The source files for this template can be found in the `src/` directory. `chip_top.sv` defines the top-level ports and instantiates `chip_core`, chip ID (QR code) and the wafer.space logo. To allow for the default bonding setup, do not change the number of pads in order to keep the original bondpad positions. To be compatible with the default breakout PCB, do not change any of the power or ground pads. However, you can change the type of the signal pads, e.g. to bidirectional, input-only or e.g. analog pads. The template provides the `NUM_INPUT` and `NUM_BIDIR` parameters for this purpose.
-
-The actual pad positions are defined in the LibreLane configuration file under `librelane/config.yaml`. The variables `PAD_SOUTH`/`PAD_EAST`/`PAD_NORTH`/`PAD_WEST` determine the respective pad placement. The LibreLane configuration also allows you to customize the flow (enable or disable steps), specify the source files, set various variables for the steps, and instantiate macros. For more information about the configuration, please refer to the LibreLane documentation: https://librelane.readthedocs.io/en/latest/
-
-To implement your own design, simply edit `chip_core.sv`. The `chip_core` module receives the clock and reset, as well as the signals from the pads defined in `chip_top`. As an example, a 42-bit wide counter is implemented.
-
-> [!NOTE]
-> For more comprehensive SystemVerilog support, enable the `USE_SLANG` variable in the LibreLane configuration.
-
-## Choosing a Different Slot Size
-
-The template supports the following slot sizes: `1x1`, `0p5x1`, `1x0p5`, `0p5x0p5`.
-By default, the design is implemented using the `1x1` slot definition.
-
-To select a different slot size, simply set the `SLOT` environment variable.
-This can be done when invoking a make target:
+Dependencies are managed with Nix — see the [LibreLane installation guide](https://librelane.readthedocs.io/en/latest/installation/nix_installation/index.html), then `nix-shell` in the repo root.
 
 ```
-SLOT=0p5x0p5 make librelane
+make clone-pdk                      # fetch gf180mcuD PDK via ciel
+make SLOT=0p5x0p5 librelane         # full RTL-to-GDS flow
+make SLOT=0p5x0p5 librelane-klayout # view the result
 ```
 
-Alternatively, you can export the slot size:
+Final views land in `final/`. Timing-relevant config lives in `librelane/config.yaml` (`CLOCK_PERIOD: 50`, `SYNTH_STRATEGY: "DELAY 1"`, setup-repair margins).
+
+## Verification
+
+`cocotb/chip_top_tb.py` drives full transactions through the chip pads: an 8-byte write, RDY poll, 6-byte read, checked against the golden vector. Two tests: every core sequentially, and all eight cores concurrently (staggered) to prove independence.
 
 ```
-export SLOT=0p5x0p5
+SLOT=0p5x0p5 make sim       # RTL simulation
+SLOT=0p5x0p5 make sim-gl    # gate-level, requires final/ from a completed hardening run
+NUM_CORES=8                 # default; must match the localparam in chip_core.sv
 ```
 
-You can change the slot that is selected by default in the Makefile by editing the value of `DEFAULT_SLOT`.
+A standalone core-level testbench is in `sim/`, and `fpga/` carries the FPGA validation setup from the original project.
 
-## Select Different IP Libraries
+The release ws1.0 contains the gds submitted for wafer.space run-2.
 
-The project template has support for selecting libraries with the below environment variables:
+## Reference
 
-| Env  | Available Values                                                          | Description                |
-|------|---------------------------------------------------------------------------|----------------------------|
-| SCL  | gf180mcu_fd_sc_mcu7t5v0, gf180mcu_fd_sc_mcu9t5v0, gf180mcu_as_sc_mcu7t3v3 | The standard cell library. |
-| PAD  | gf180mcu_fd_io, gf180mcu_ocd_io                                           | The I/O pad library.       |
-| SRAM | gf180mcu_fd_ip_sram, gf180mcu_ocd_ip_sram                                 | The SRAM library.          |
-
-For example, to build the 0p5x0p5 chip with 3v3 libraries:
-
-```
-SLOT=0p5x0p5 SCL=gf180mcu_as_sc_mcu7t3v3 PAD=gf180mcu_ocd_io SRAM=gf180mcu_ocd_ip_sram make librelane
-```
-
-The default values can be changed in the Makefile.
-
-> [!NOTE]
-> Not all of the community-created IPs have been tested yet, so support for them is experimental!
-
-## Building a Standalone Padring for Analog Design
-
-To build just the padring without any standard cell rows, digital routing or filler cells, run the following command:
-
-```
-make librelane-padring
-```
-
-It is also possible to build the padring for other slot sizes:
-
-```
-SLOT=0p5x0p5 make librelane-padring
-```
-
-## Precheck
-
-To check whether your design is suitable for manufacturing, run the [gf180mcu-precheck](https://github.com/wafer-space/gf180mcu-precheck) with your layout.
+[50 Years of CORDIC: Algorithms, Architectures, and Applications](https://ieeexplore.ieee.org/document/5089431)
